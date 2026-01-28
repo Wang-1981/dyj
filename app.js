@@ -505,6 +505,9 @@ class FundFlowVisualizer {
     
     // 实时数据更新
     async refreshData() {
+        // 清除缓存，确保获取新数据
+        this.clearCache();
+        
         // 更新时间戳
         const now = new Date();
         const timeString = now.getFullYear() + '-' + 
@@ -514,13 +517,37 @@ class FundFlowVisualizer {
             now.getMinutes().toString().padStart(2, '0');
         document.getElementById('last-update').textContent = `最后更新：${timeString}`;
         
-        // 重新渲染所有数据
-        await this.renderMarketData();
-        await this.renderSectorData();
-        await this.renderThreeDayAnalysis();
+        // 显示加载中提示
+        const originalText = document.getElementById('refresh-data').textContent;
+        document.getElementById('refresh-data').innerHTML = '<i class="fas fa-spinner fa-spin"></i> 更新中...';
+        document.getElementById('refresh-data').disabled = true;
         
-        // 显示更新成功提示
-        alert('数据已成功更新到最新！');
+        try {
+            // 重新渲染所有数据
+            await this.renderMarketData();
+            await this.renderSectorData();
+            await this.renderThreeDayAnalysis();
+            
+            // 显示更新成功提示
+            alert('数据已成功更新到最新！');
+        } catch (error) {
+            console.error('更新数据失败:', error);
+            alert('更新数据失败，请重试！');
+        } finally {
+            // 恢复按钮状态
+            document.getElementById('refresh-data').innerHTML = '<i class="fas fa-sync-alt"></i> 实时更新数据';
+            document.getElementById('refresh-data').disabled = false;
+        }
+    }
+    
+    // 清除缓存
+    clearCache() {
+        this.dataCache = {
+            sectorData: null,
+            stockData: {},
+            lastUpdated: null
+        };
+        console.log('缓存已清除，准备获取新数据...');
     }
     
     // 渲染大盘资金流向数据
@@ -805,4 +832,4 @@ function calculateStrength(stockData, indexData) {
     // 强度:=100*SMA(MAX(D11,0),12,1)/SMA(ABS(D11),12,1)-5;
     
     return Math.round(Math.random() * 100); // 模拟计算结果
-}
+
