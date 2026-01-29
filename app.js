@@ -1,3 +1,4 @@
+// 东方财富网数据获取函数
 class EastMoneyDataFetcher {
     constructor() {
         this.sectors = [
@@ -323,19 +324,45 @@ class EastMoneyDataFetcher {
         }
         
         try {
-            console.log('正在从后端API获取大盘资金流向数据...');
-            const response = await fetch(`${this.apiBaseUrl}/market-fund-flow`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            this.dataCache.marketData = data;
+            // 只使用Alltick API获取大盘数据
+            console.log('正在从Alltick API获取大盘资金流向数据...');
+            
+            // 获取上证指数数据作为大盘代表
+            const shIndexData = await this.fetchFromAlltickApi('000001.SH');
+            
+            // 同时获取板块数据
+            const sectorData = await this.getSectorData(1);
+            
+            // 获取指数数据
+            const indexData = await this.getIndexData();
+            
+            // 构建大盘数据
+            const marketData = {
+                sector_data: sectorData,
+                index_data: indexData,
+                fund_flow_data: sectorData,
+                last_updated: new Date().toLocaleString()
+            };
+            
+            // 缓存数据
+            this.dataCache.marketData = marketData;
             this.dataCache.lastUpdated = now;
-            return data;
+            
+            console.log('Alltick API大盘数据处理完成:', marketData);
+            return marketData;
         } catch (error) {
             console.error('获取大盘数据失败:', error);
-            // 失败时使用模拟数据
-            return this.generateMockMarketData();
+            // 出错时返回空的大盘数据
+            return {
+                sector_data: [],
+                index_data: {
+                    sh: { current_price: 0, change: 0, change_percent: 0 },
+                    sz: { current_price: 0, change: 0, change_percent: 0 },
+                    cyb: { current_price: 0, change: 0, change_percent: 0 }
+                },
+                fund_flow_data: [],
+                last_updated: new Date().toLocaleString()
+            };
         }
     }
     
@@ -350,55 +377,47 @@ class EastMoneyDataFetcher {
         }
         
         try {
-            // 尝试使用Alltick API获取指数数据
-            if (this.useAlltickApi && this.alltickApiKey) {
-                const alltickData = await this.fetchIndexFromAlltick();
-                if (alltickData) {
-                    // 处理Alltick API返回的数据格式
-                    console.log('处理Alltick API指数数据:', alltickData);
-                    
-                    // 解析返回的数据，根据实际格式调整
-                    const indexData = {
-                        sh: {
-                            current_price: alltickData.price || alltickData.data?.price || 4139.90,
-                            change: alltickData.change || alltickData.data?.change || 7.29,
-                            change_percent: alltickData.change_percent || alltickData.data?.change_percent || 0.18
-                        },
-                        sz: {
-                            current_price: 14329.91,
-                            change: 13.27,
-                            change_percent: 0.09
-                        },
-                        cyb: {
-                            current_price: 3342.60,
-                            change: 23.45,
-                            change_percent: 0.71
-                        }
-                    };
-                    this.dataCache.indexData = indexData;
-                    this.dataCache.lastUpdated = now;
-                    console.log('Alltick API指数数据处理完成:', indexData);
-                    return indexData;
-                }
-            }
+            // 只使用Alltick API获取指数数据
+            console.log('正在从Alltick API获取指数数据...');
+            const alltickData = await this.fetchIndexFromAlltick();
             
-            // 如果Alltick API未启用或失败，尝试使用后端API
-            console.log('正在从后端API获取指数数据...');
-            const response = await fetch(`${this.apiBaseUrl}/index-data`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            if (alltickData) {
+                // 处理Alltick API返回的数据格式
+                console.log('处理Alltick API指数数据:', alltickData);
+                
+                // 解析返回的数据，根据实际格式调整
+                const indexData = {
+                    sh: {
+                        current_price: parseFloat(alltickData.price || alltickData.data?.price || 0),
+                        change: parseFloat(alltickData.change || alltickData.data?.change || 0),
+                        change_percent: parseFloat(alltickData.change_percent || alltickData.data?.change_percent || 0)
+                    },
+                    sz: {
+                        current_price: parseFloat(alltickData.price || alltickData.data?.price || 0),
+                        change: parseFloat(alltickData.change || alltickData.data?.change || 0),
+                        change_percent: parseFloat(alltickData.change_percent || alltickData.data?.change_percent || 0)
+                    },
+                    cyb: {
+                        current_price: parseFloat(alltickData.price || alltickData.data?.price || 0),
+                        change: parseFloat(alltickData.change || alltickData.data?.change || 0),
+                        change_percent: parseFloat(alltickData.change_percent || alltickData.data?.change_percent || 0)
+                    }
+                };
+                
+                this.dataCache.indexData = indexData;
+                this.dataCache.lastUpdated = now;
+                console.log('Alltick API指数数据处理完成:', indexData);
+                return indexData;
+            } else {
+                throw new Error('Alltick API返回数据为空');
             }
-            const data = await response.json();
-            this.dataCache.indexData = data;
-            this.dataCache.lastUpdated = now;
-            return data;
         } catch (error) {
             console.error('获取指数数据失败:', error);
-            // 失败时使用模拟数据
+            // 即使失败也返回空数据，不再使用模拟数据
             return {
-                sh: { current_price: 4139.90, change: 7.29, change_percent: 0.18 },
-                sz: { current_price: 14329.91, change: 13.27, change_percent: 0.09 },
-                cyb: { current_price: 3342.60, change: 23.45, change_percent: 0.71 }
+                sh: { current_price: 0, change: 0, change_percent: 0 },
+                sz: { current_price: 0, change: 0, change_percent: 0 },
+                cyb: { current_price: 0, change: 0, change_percent: 0 }
             };
         }
     }
@@ -415,34 +434,127 @@ class EastMoneyDataFetcher {
         }
         
         try {
-            console.log(`正在从后端API获取板块资金流向数据，时间范围: ${timeRange}日...`);
-            const response = await fetch(`${this.apiBaseUrl}/sector-fund-flow?time_range=${timeRange}`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
+            // 只使用Alltick API获取板块数据
+            console.log(`正在从Alltick API获取板块资金流向数据，时间范围: ${timeRange}日...`);
+            
+            // 为每个板块生成基于Alltick API的数据
+            const sectorData = this.sectors.map(async (sector) => {
+                try {
+                    // 这里可以根据板块特性选择一个代表性股票来获取数据
+                    // 或者使用板块指数代码获取数据
+                    let representativeStockCode = '600703'; // 默认使用三安光电作为代表性股票
+                    
+                    // 根据板块选择不同的代表性股票
+                    switch (sector.name) {
+                        case '新能源汽车':
+                            representativeStockCode = '002594'; // 比亚迪
+                            break;
+                        case '光伏':
+                            representativeStockCode = '601012'; // 隆基绿能
+                            break;
+                        case '锂电池':
+                            representativeStockCode = '300750'; // 宁德时代
+                            break;
+                        default:
+                            representativeStockCode = '600703'; // 三安光电
+                    }
+                    
+                    // 从Alltick API获取代表性股票数据
+                    const stockData = await this.fetchFromAlltickApi(representativeStockCode);
+                    
+                    if (stockData) {
+                        // 基于股票数据生成板块数据
+                        const fundFlow = parseFloat(stockData.fund_flow || stockData.data?.fund_flow || 0);
+                        const northFund = parseFloat(stockData.north_fund || stockData.data?.north_fund || 0);
+                        const marginTrading = parseFloat(stockData.margin_trading || stockData.data?.margin_trading || 0);
+                        const etfFund = parseFloat(stockData.etf_fund || stockData.data?.etf_fund || 0);
+                        const largeOrder = parseFloat(stockData.large_order || stockData.data?.large_order || 0);
+                        const l2Data = parseFloat(stockData.l2_data || stockData.data?.l2_data || 0);
+                        const strength = Math.round((fundFlow / 2 * 100) - 20);
+                        
+                        // 根据时间范围调整数据
+                        return {
+                            name: sector.name,
+                            code: sector.code,
+                            fund_flow: parseFloat((fundFlow * timeRange).toFixed(2)),
+                            north_fund: parseFloat((northFund * timeRange).toFixed(2)),
+                            margin_trading: parseFloat((marginTrading * timeRange).toFixed(2)),
+                            etf_fund: parseFloat((etfFund * timeRange).toFixed(2)),
+                            large_order: parseFloat((largeOrder * timeRange).toFixed(2)),
+                            l2_data: parseFloat((l2Data * timeRange).toFixed(2)),
+                            strength: strength,
+                            ratio: parseFloat(((Math.abs(fundFlow) / 50) * 100).toFixed(2)),
+                            three_day_flow: parseFloat((fundFlow * 3 * timeRange).toFixed(2)),
+                            main_inflow: parseFloat((fundFlow * 1.5 * timeRange).toFixed(2)),
+                            main_inflow_ratio: parseFloat(((Math.abs(fundFlow) / (Math.abs(fundFlow) || 1)) * 100).toFixed(2))
+                        };
+                    } else {
+                        // API返回为空时使用零值
+                        return {
+                            name: sector.name,
+                            code: sector.code,
+                            fund_flow: 0,
+                            north_fund: 0,
+                            margin_trading: 0,
+                            etf_fund: 0,
+                            large_order: 0,
+                            l2_data: 0,
+                            strength: 0,
+                            ratio: 0,
+                            three_day_flow: 0,
+                            main_inflow: 0,
+                            main_inflow_ratio: 0
+                        };
+                    }
+                } catch (error) {
+                    console.error(`获取板块 ${sector.name} 数据失败:`, error);
+                    // 出错时使用零值
+                    return {
+                        name: sector.name,
+                        code: sector.code,
+                        fund_flow: 0,
+                        north_fund: 0,
+                        margin_trading: 0,
+                        etf_fund: 0,
+                        large_order: 0,
+                        l2_data: 0,
+                        strength: 0,
+                        ratio: 0,
+                        three_day_flow: 0,
+                        main_inflow: 0,
+                        main_inflow_ratio: 0
+                    };
+                }
+            });
+            
+            // 等待所有板块数据获取完成
+            const data = await Promise.all(sectorData);
             
             // 缓存数据
             this.dataCache[cacheKey] = data;
             this.dataCache.lastUpdated = now;
+            this.dataCache.sectorData = data;
             
+            console.log(`板块数据处理完成，共 ${data.length} 个板块`);
             return data;
         } catch (error) {
             console.error('获取板块数据失败:', error);
-            // 失败时使用模拟数据
-            const mockData = this.generateMockSectorData();
-            // 根据时间范围调整模拟数据
-            mockData.forEach(item => {
-                item.fund_flow *= timeRange;
-                item.north_fund *= timeRange;
-                item.margin_trading *= timeRange;
-                item.etf_fund *= timeRange;
-                item.large_order *= timeRange;
-                item.l2_data *= timeRange;
-                item.three_day_flow *= timeRange;
-                item.main_inflow *= timeRange;
-            });
-            return mockData;
+            // 出错时返回空的板块数据
+            return this.sectors.map(sector => ({
+                name: sector.name,
+                code: sector.code,
+                fund_flow: 0,
+                north_fund: 0,
+                margin_trading: 0,
+                etf_fund: 0,
+                large_order: 0,
+                l2_data: 0,
+                strength: 0,
+                ratio: 0,
+                three_day_flow: 0,
+                main_inflow: 0,
+                main_inflow_ratio: 0
+            }));
         }
     }
     
@@ -459,48 +571,43 @@ class EastMoneyDataFetcher {
         
         for (const stock of sectorStocks) {
             try {
-                // 尝试使用Alltick API获取股票数据
-                if (this.useAlltickApi && this.alltickApiKey) {
-                    const alltickData = await this.fetchFromAlltickApi(stock.code);
-                    if (alltickData) {
-                        // 处理Alltick API返回的数据格式
-                        const fundFlow = alltickData.data?.fund_flow || 0;
-                        const largeOrder = alltickData.data?.large_order || 0;
-                        const l2Data = alltickData.data?.l2_data || 0;
-                        const strength = Math.round((fundFlow / 2 * 100) - 20);
-                        
-                        stockData.push({
-                            code: stock.code,
-                            name: stock.name,
-                            fund_flow: parseFloat(fundFlow.toFixed(2)),
-                            large_order: parseFloat(largeOrder.toFixed(2)),
-                            l2_data: parseFloat(l2Data.toFixed(2)),
-                            strength: strength
-                        });
-                        continue;
-                    }
+                // 只使用Alltick API获取股票数据
+                console.log(`正在从Alltick API获取股票 ${stock.code} 数据...`);
+                const alltickData = await this.fetchFromAlltickApi(stock.code);
+                
+                if (alltickData) {
+                    // 处理Alltick API返回的数据格式
+                    console.log(`处理股票 ${stock.code} 的Alltick API数据:`, alltickData);
+                    
+                    // 解析返回的数据，根据实际格式调整
+                    const fundFlow = parseFloat(alltickData.fund_flow || alltickData.data?.fund_flow || 0);
+                    const largeOrder = parseFloat(alltickData.large_order || alltickData.data?.large_order || 0);
+                    const l2Data = parseFloat(alltickData.l2_data || alltickData.data?.l2_data || 0);
+                    const strength = Math.round((fundFlow / 2 * 100) - 20);
+                    
+                    stockData.push({
+                        code: stock.code,
+                        name: stock.name,
+                        fund_flow: parseFloat(fundFlow.toFixed(2)),
+                        large_order: parseFloat(largeOrder.toFixed(2)),
+                        l2_data: parseFloat(l2Data.toFixed(2)),
+                        strength: strength
+                    });
+                } else {
+                    // API返回为空时使用零值
+                    console.log(`股票 ${stock.code} 的Alltick API数据为空`);
+                    stockData.push({
+                        code: stock.code,
+                        name: stock.name,
+                        fund_flow: 0,
+                        large_order: 0,
+                        l2_data: 0,
+                        strength: 0
+                    });
                 }
-                
-                // 如果Alltick API未启用或失败，使用模拟数据
-                const sectorData = this.dataCache.sectorData?.find(s => s.name === sector);
-                const baseFlow = sectorData ? sectorData.fund_flow / 4 : 0;
-                
-                const fundFlow = baseFlow + (Math.random() - 0.5) * 2;
-                const largeOrder = fundFlow * (0.6 + Math.random() * 0.8);
-                const l2Data = fundFlow * (0.4 + Math.random() * 0.6);
-                const strength = Math.round((fundFlow / 2 * 100) - 20);
-                
-                stockData.push({
-                    code: stock.code,
-                    name: stock.name,
-                    fund_flow: parseFloat(fundFlow.toFixed(2)),
-                    large_order: parseFloat(largeOrder.toFixed(2)),
-                    l2_data: parseFloat(l2Data.toFixed(2)),
-                    strength: strength
-                });
             } catch (error) {
                 console.error(`获取股票 ${stock.code} 数据失败:`, error);
-                // 出错时使用默认数据
+                // 出错时使用零值
                 stockData.push({
                     code: stock.code,
                     name: stock.name,
@@ -513,6 +620,7 @@ class EastMoneyDataFetcher {
         }
         
         this.dataCache.stockData[sector] = stockData;
+        console.log(`股票数据处理完成，共 ${stockData.length} 只股票`);
         return stockData;
     }
     
@@ -1551,3 +1659,4 @@ function calculateStrength(stockData, indexData) {
         return Math.round(Math.random() * 100 - 50); // 出错时返回随机值
     }
 }
+
